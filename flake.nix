@@ -15,9 +15,26 @@
 		    ps.binary
 		    ps.containers
 		    ps.zlib
+		    ps.optparse-applicative
 		]);
 
-	    in rec {
+		mpq = pkgs.stdenv.mkDerivation {
+		    name = "mpq";
+		    src = self;
+		    buildPhase = ''
+			${ghcPackages}/bin/ghc -O Main.hs -o mpq
+		    '';
+
+		    installPhase = ''
+			mkdir -p $out/bin
+			install -t $out/bin mpq
+		    '';
+		};
+
+	    in {
+		packages.mpq = mpq;
+		defaultPackage = mpq;
+
 		devShell = pkgs.mkShell {
 		    buildInputs = [
 			ghcPackages

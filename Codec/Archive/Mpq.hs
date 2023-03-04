@@ -44,6 +44,10 @@ import Data.List (genericLength)
 
 import qualified Data.Sequence as Seq
 
+import Data.IORef
+
+newtype Archive = Archive { mpqRef :: IORef Mpq }
+
 data Mpq = Mpq
     { header :: Header
     , hashtable :: Hashtable
@@ -71,7 +75,13 @@ headerByteSize = 32
 hashtableByteSize n = fromIntegral n * 16
 blocktableByteSize n = fromIntegral n * 16
 
-open :: MonadIO m => FilePath -> m (Maybe Mpq)
+close archive = do
+    mpq <- readIORef $ mpqRef archive
+    hFlush $ fileHandle mpq
+    hClose $ fileHandle mpq
+    writeIORef (mpqRef archive) $ error "Mpq closed"
+
+open :: MonadIO m => FilePath -> m (Maybe Archive)
 open path = runMaybeT $ do
     fh <- liftIO $ IO.openBinaryFile path ReadWriteMode
     headerPos <- findHeader fh
@@ -88,7 +98,10 @@ open path = runMaybeT $ do
     liftIO $ hSeek fh AbsoluteSeek $ headerPos + fromIntegral (btPos h)
     bt <- liftIO $ decodeBlocktable numBlocktableEntries <$> BL.hGet fh blocktableBytes
 
-    pure $ Mpq h ht bt fh headerPos
+    let mpq = Mpq h ht bt fh headerPos
+
+    Archive <$> liftIO (newIORef mpq)
+    --pure $ Mpq h ht bt fh headerPos
 
 findHeader :: MonadIO m => Handle -> MaybeT m Integer
 findHeader fh = do
@@ -121,17 +134,21 @@ genericNormalSize = fromIntegral . normalSize
 genericCompressedSize = fromIntegral . compressedSize
 
 --readFile :: MonadIO m => Mpq -> FilePath -> m (Maybe HTEntry)
-readFile mpq fp = runMaybeT $ do
+readFile archive fp = runMaybeT $ do
+    mpq <- liftIO $ readIORef $ mpqRef archive
     htentry <- hoistMaybe $ Hashtable.lookup fp (hashtable mpq)
     btentry <- hoistMaybe $ Blocktable.lookup (blocktableIndex htentry) (blocktable mpq)
     extractFile mpq btentry fp
     --pure (htentry, btentry)
 
-addFile mpq fp bs =  do
+addFile archive fp bs =  do
+    mpq <- liftIO $ readIORef $ mpqRef archive
     let htentry = Hashtable.lookup fp (hashtable mpq)
-    case htentry of
+    mpq' <- case htentry of
         --Nothing -> addNewFile mpq fp bs
         Just hte -> replaceFile mpq fp bs hte
+    writeIORef (mpqRef archive) mpq'
+
 
 replaceFile mpq fp bs hte = do
     let Just bte = Blocktable.lookup (blocktableIndex hte) (blocktable mpq)
@@ -147,6 +164,7 @@ replaceFile mpq fp bs hte = do
         mpq' = updateBlocktableEntry mpq (blocktableIndex hte) bte
     liftIO $ hPutBuilder (fileHandle mpq) compressed
     liftIO $ writeMpqBlocktable mpq'
+    pure mpq'
 
 
 
