@@ -118,6 +118,8 @@ findHeader fh = do
                 liftIO $ hSeek fh RelativeSeek (512-4)
                 find (p+512) m
 
+ceilDiv :: (Integral i, Integral j, Integral k) => i -> j -> k
+ceilDiv a b = ceiling $ fromIntegral a / fromIntegral b
 
 --sectorSize :: Mpq -> Int
 sectorSize mpq = 512 * ( 1 `shiftL` s)
