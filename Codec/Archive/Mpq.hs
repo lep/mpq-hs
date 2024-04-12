@@ -118,12 +118,6 @@ findHeader fh = do
                 liftIO $ hSeek fh RelativeSeek (512-4)
                 find (p+512) m
 
--- i've got no idea why i don't have this function available...
-hoistMaybe :: (Applicative m) => Maybe b -> MaybeT m b
-hoistMaybe = MaybeT . pure
-
---ceilDiv :: (Integral i, Integral j, Integral k) => i -> j -> k
-ceilDiv a b = ceiling $ fromIntegral a / fromIntegral b
 
 --sectorSize :: Mpq -> Int
 sectorSize mpq = 512 * ( 1 `shiftL` s)

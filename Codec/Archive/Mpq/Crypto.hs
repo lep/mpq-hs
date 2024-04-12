@@ -17,6 +17,7 @@ import qualified Data.ByteString.Char8 as Strict8
 
 import Data.Binary.Get
 import Data.Binary.Put
+import Control.Monad (forM)
 
 cryptTable :: Array Word32 Word32
 cryptTable = array (0, 0x500) . concat . flip evalState 0x00100001 $
