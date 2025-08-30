@@ -1,0 +1,30 @@
+cabal-version:      3.0
+name:               mpq
+version:            0.1.0.0
+-- synopsis:
+-- description:
+license:            GPL-3.0-only
+license-file:       LICENSE
+author:             lep
+maintainer:         lep.delete@googlemail.com
+-- copyright:
+build-type:         Simple
+extra-doc-files:    CHANGELOG.md
+-- extra-source-files:
+
+common warnings
+    ghc-options: -Wall
+
+executable mpq
+    import:           warnings
+    main-is:          Main.hs
+    other-modules: Codec.Archive.Mpq,
+                    Codec.Archive.Mpq.Blocktable,
+                    Codec.Archive.Mpq.Crypto,
+                    Codec.Archive.Mpq.Hashtable,
+                    Codec.Archive.Mpq.Header
+    -- other-extensions:
+    build-depends:    base ^>=4.19.2.0, array, bytestring, binary, containers,
+                      filepath, mtl, transformers, optparse-applicative, zlib
+    hs-source-dirs:   src
+    default-language: Haskell2010
