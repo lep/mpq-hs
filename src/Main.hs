@@ -1,66 +1,94 @@
+{-# LANGUAGE ImportQualifiedPost #-}
+
 module Main where
 
-import Options.Applicative
-
-import qualified Codec.Archive.Mpq as Mpq
-
-import qualified Data.ByteString.Lazy as BL
-
+import Codec.Archive.Mpq qualified as Mpq
 import Control.Applicative
 import Control.Monad
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.Trans.Maybe
-import Control.Monad.IO.Class (liftIO, MonadIO)
-
-import System.FilePath
+import Data.ByteString.Builder (hPutBuilder)
+import Data.ByteString.Lazy qualified as BL
 import Data.Maybe
+import Options.Applicative
+import System.FilePath
+import System.IO (BufferMode (BlockBuffering), hSetBinaryMode, hSetBuffering, stdout)
 
+data Action
+  = AddAction FilePath [(FilePath, Maybe FilePath)]
+  | CatAction FilePath FilePath
+  deriving (Show)
 
-data Action = AddAction FilePath [(FilePath, Maybe FilePath)]
-    deriving (Show)
-
+parseOptions :: IO Action
 parseOptions = customExecParser (prefs showHelpOnEmpty) opts
   where
-    opts = info (pCommand <**> helper)
-            ( fullDesc
-            <> header ("mpq - Small mpq utility") )
+    opts =
+      info
+        (pCommand <**> helper)
+        ( fullDesc
+            <> header "mpq - Small mpq utility"
+        )
 
-    pCommand = hsubparser
-        ( command "add" (info addOptions (progDesc "Adds a file to the mpq archive")))
-
+    pCommand =
+      hsubparser
+        ( command "add" (info addOptions (progDesc "Adds a file to the mpq archive"))
+            <> command "cat" (info catOptions (progDesc "Extracts a file from the mpq archive and writes it to stdout"))
+        )
 
     addOptions =
-        AddAction <$> pMpq
-                  <*> some pFileOptionalName
+      AddAction
+        <$> pMpq
+        <*> some pFileOptionalName
 
-    pMpq = strArgument
-      ( metavar "MPQ"
-      <> help "Path to the mpq archive"
-      )
+    catOptions = CatAction <$> pMpq <*> strArgument (metavar "PATH" <> help "Filepath to read from the mpq archive")
+
+    pMpq =
+      strArgument
+        ( metavar "MPQ"
+            <> help "Path to the mpq archive"
+        )
 
     pFileOptionalName =
-        (,) <$> pFile
-            <*> optional pNameArg
+      (,)
+        <$> pFile
+        <*> optional pNameArg
 
-    pFile = strArgument
-        (  metavar "FILE"
-        <> help "File to add to the archive"
+    pFile =
+      strArgument
+        ( metavar "FILE"
+            <> help "File to add to the archive"
         )
 
-    pNameArg = strOption
+    pNameArg =
+      strOption
         ( long "name"
-        <> metavar "NAME"
-        <> help "Add FILE under this NAME to the archive"
+            <> metavar "NAME"
+            <> help "Add FILE under this NAME to the archive"
         )
 
+main :: IO ()
 main = do
-    options <- parseOptions
-    case options of
-        AddAction{} -> addFile options
+  options <- parseOptions
+  void $ case options of
+    AddAction mpq filesToAdd -> addFile mpq filesToAdd
+    CatAction mpq path -> catFile mpq path
+  pure ()
 
-addFile (AddAction mpq filesToAdd) = runMaybeT $ do
-    archive <- MaybeT $ Mpq.open mpq
-    forM_ filesToAdd $ \(fp, optionalName) -> do
-        let internalName = head $ catMaybes [ optionalName, Just $ takeFileName fp ]
-        bs <- liftIO $ BL.readFile fp
-        liftIO $ Mpq.addFile archive internalName bs
-    liftIO $ Mpq.close archive
+addFile :: (MonadIO m, Foldable t) => FilePath -> t (FilePath, Maybe FilePath) -> m (Maybe ())
+addFile mpq filesToAdd = runMaybeT $ do
+  archive <- MaybeT $ Mpq.open mpq
+  forM_ filesToAdd $ \(fp, optionalName) -> do
+    let internalName = head $ catMaybes [optionalName, Just $ takeFileName fp]
+    bs <- liftIO $ BL.readFile fp
+    liftIO $ Mpq.addFile archive internalName bs
+  liftIO $ Mpq.close archive
+
+catFile :: (MonadIO m) => FilePath -> FilePath -> m (Maybe ())
+catFile mpq path = runMaybeT $ do
+  archive <- MaybeT $ Mpq.open mpq
+  builder <- MaybeT $ Mpq.readFile archive path
+  liftIO $ do
+    hSetBinaryMode stdout True
+    hSetBuffering stdout (BlockBuffering Nothing)
+    hPutBuilder stdout builder
+    Mpq.close archive
