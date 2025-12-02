@@ -12,5 +12,14 @@
       packages = eachSystem (system:
         let pkgs = import nixpkgs { inherit system; };
         in { default = mpq pkgs; });
+
+      devShells = eachSystem (system:
+        let pkgs = import nixpkgs { inherit system; };
+        in {
+          default = pkgs.mkShell {
+            nativeBuildInputs = [ pkgs.cabal-install pkgs.zlib ];
+
+          };
+        });
     };
 }
